@@ -1,0 +1,77 @@
+---
+- name: Install and configure apache2
+  hosts: all
+  become: yes
+  vars:
+    http_port: 80
+    domain: testexample.com
+    domainse: testtest.com
+  tasks:
+  - name: Install apache2
+    ansible.builtin.package: 
+            name: apache2 
+            state: present           
+    notify: Restart apache2  
+  - name: Install firewalld
+    yum: name={{ item }} state=latest
+    with_items:
+        - firewalld
+        - ipset
+  - name: add services
+    firewalld: 
+      service: http
+      permanent: true
+      state: enabled
+  - name: reload service firewalld
+    systemd:
+      name: firewalld
+      state: reloaded     
+  - name: apache2 listen on port {{ http_port }}
+    lineinfile: dest=/etc/apache2/ports.conf regexp="^Listen " line="Listen {{ http_port }}" state=present
+    notify: Restart apache2  
+
+  - name: apache2 virtualhost on port {{ http_port }}
+    lineinfile: dest=/etc/apache2/sites-available/000-default.conf regexp="^<VirtualHost \*:" line="<VirtualHost *:{{ http_port }}>"
+    notify: Restart apache2
+  - name: create virtual host file1
+    template: 
+         src=virtualhost.conf dest=/etc/apache2/sites-available/{{ domain }}.conf   
+  - name: a2ensite {{ domain }}
+    command: a2ensite {{ domain }}
+    args:
+        creates: /etc/apache2/sites-enabled/{{ domain }}.conf
+    notify: Restart apache2 
+  - name: Create document root
+    file:
+        path: "/var/www/html/{{ domain  }}"
+        state: directory
+        mode: '0755'   
+  - name: Copy html
+    template:
+        src: "index.html"
+        dest: "/var/www/html/{{ domain  }}/index.html"     
+  - name: create virtual host file2
+    template: 
+         src=virtualhost.conf dest=/etc/apache2/sites-available/{{ domainse }}.conf   
+  - name: a2ensite {{ domainse }}
+    command: a2ensite {{ domainse }}
+    args:
+        creates: /etc/apache2/sites-enabled/{{ domainse }}.conf
+    notify: Restart apache2 
+  - name: Create document root
+    file:
+        path: "/var/www/html/{{ domainse  }}"
+        state: directory
+        mode: '0755'   
+  - name: Copy html
+    template:
+        src: "index.html"
+        dest: "/var/www/html/{{ domainse  }}/index.html"     
+          
+    
+  handlers:
+          - name: Restart apache2 
+            ansible.builtin.service:
+                    name: apache2
+                 
+   
